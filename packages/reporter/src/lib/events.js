@@ -54,7 +54,7 @@ export default {
     runner.on('test:after:run', (runnable) => {
       runnablesStore.runnableFinished(runnable)
 
-      if (runnable.final) {
+      if (runnable.final || runnable.state === 'passed') {
         statsStore.incrementCount(runnable.state)
       }
     })
@@ -111,10 +111,6 @@ export default {
       const test = runnablesStore.testById(testId)
       let model = test
 
-      if (attemptId) {
-        model = test.getAttemptById(attemptId)
-      }
-
       if (model.err.isCommandErr) {
         const command = model.commandMatchingErr()
 
@@ -125,7 +121,7 @@ export default {
         return
       }
 
-      runner.emit('runner:console:error', testId)
+      runner.emit('runner:console:error', testId, attemptId)
     })
 
     localBus.on('show:snapshot', (commandId) => {

@@ -270,7 +270,7 @@
     "state": "passed"
   },
   "command": {
-    "testAttempt": 2,
+    "attemptIndex": 2,
     "hookName": "test",
     "id": "c2",
     "instrument": "command",

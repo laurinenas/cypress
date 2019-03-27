@@ -26,14 +26,17 @@ export default class Test extends Runnable {
   }
 
   @computed get state () {
-    return this._lastAttempt ? this._lastAttempt.state : 'active'
+
+    return this._lastAttempt ? this._lastAttempt.state : 'processing'
   }
 
   @computed get err () {
+
     return this._lastAttempt ? this._lastAttempt.err : new Err({})
   }
 
   @computed get _lastAttempt () {
+
     return _.last(this.attempts)
   }
 
@@ -50,23 +53,24 @@ export default class Test extends Runnable {
   }
 
   isLastAttempt (attemptModel) {
+
     return this._lastAttempt === attemptModel
   }
 
   addLog = (props) => {
-    this._withAttempt(props.testAttempt, (attempt) => {
+    this._withAttempt(props.attemptIndex, (attempt) => {
       attempt.addLog(props)
     })
   }
 
   updateLog (props) {
-    this._withAttempt(props.testAttempt, (attempt) => {
+    this._withAttempt(props.attemptIndex, (attempt) => {
       attempt.updateLog(props)
     })
   }
 
-  start (props) {
-    let attempt = this.getAttemptById(props.attempt)
+  @action start (props) {
+    let attempt = this.getAttemptByIndex(props.attemptIndex)
 
     if (!attempt) {
       attempt = this._addAttempt(props)
@@ -88,7 +92,7 @@ export default class Test extends Runnable {
   @action finish (props) {
     this._isFinished = !!props.final
 
-    this._withAttempt(props.attempt, (attempt) => {
+    this._withAttempt(props.attemptIndex, (attempt) => {
       attempt.finish(props)
     })
   }
@@ -97,8 +101,8 @@ export default class Test extends Runnable {
     this.isLongRunning = isLongRunning
   }
 
-  getAttemptById (attemptId) {
-    return this._attempts[attemptId]
+  getAttemptByIndex (attemptIndex) {
+    return this._attempts[attemptIndex]
   }
 
   commandMatchingErr () {
@@ -114,8 +118,8 @@ export default class Test extends Runnable {
     return attempt
   }
 
-  _withAttempt (attemptId, cb) {
-    const attempt = this.getAttemptById(attemptId)
+  _withAttempt (attemptIndex, cb) {
+    const attempt = this.getAttemptByIndex(attemptIndex)
 
     if (attempt) cb(attempt)
   }

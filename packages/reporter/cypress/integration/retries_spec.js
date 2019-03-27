@@ -269,9 +269,7 @@ describe('retries', function () {
       tests.unshift({
         id: `r${i + 5}`,
         title: 'test',
-        attempts: [
-          { state: 'passed' },
-        ],
+        attempts: [{ state: 'passed' }],
       })
     })
 

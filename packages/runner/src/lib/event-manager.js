@@ -18,6 +18,10 @@ channel.on('connect', () => {
   channel.emit('runner:connected')
 })
 
+if (window.Cypress) {
+  window.channel = channel
+}
+
 const driverToReporterEvents = 'paused'.split(' ')
 const driverToLocalAndReporterEvents = 'run:start run:end'.split(' ')
 const driverToSocketEvents = 'backend:request automation:request mocha'.split(' ')
@@ -69,10 +73,12 @@ const eventManager = {
       channel.on(event, rerun)
     })
 
-    reporterBus.on('runner:console:error', (testId) => {
+    reporterBus.on('runner:console:error', (testId, attemptIndex) => {
       if (!Cypress) return
 
-      const err = Cypress.getErrorByTestId(testId)
+
+
+      const err = Cypress.getErrorByTestId(testId, attemptIndex)
 
       if (err) {
         logger.clearLog()
@@ -183,7 +189,7 @@ const eventManager = {
 
   initialize ($autIframe, config) {
     Cypress.initialize($autIframe)
-
+    Cypress._channel = channel
     // get the current runnable in case we reran mid-test due to a visit
     // to a new domain
     channel.emit('get:existing:run:state', (state = {}) => {

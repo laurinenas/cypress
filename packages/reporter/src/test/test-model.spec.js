@@ -37,7 +37,7 @@ describe('Test model', () => {
 
   context('#addLog', () => {
     it('adds the log to the attempt', () => {
-      const test = new Test({ attempts: [{ attempt: 1 }] })
+      const test = new Test({ attempts: [{ attemptIndex: 1 }] })
       const props = { testAttempt: 1 }
       const attempt = test.getAttemptById(1)
 

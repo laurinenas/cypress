@@ -9,9 +9,11 @@ const { Test } = Mocha
 const { Runner } = Mocha
 const { Runnable } = Mocha
 
+const SUITE_RUNNABLE_PROPS = ['_beforeAll', '_beforeEach', '_afterEach', '_afterAll', 'tests']
+
 const testClone = Test.prototype.clone
 const runnerRun = Runner.prototype.run
-const runnerFail = Runner.prototype.fail
+// const runnerFail = Runner.prototype.fail
 const runnableRun = Runnable.prototype.run
 const runnableClearTimeout = Runnable.prototype.clearTimeout
 const runnableResetTimeout = Runnable.prototype.resetTimeout
@@ -89,6 +91,10 @@ const getRunner = function (_mocha) {
   return _mocha.run()
 }
 
+// const restoreTestClone = () => {
+//   return Test.prototype.clone = testClone
+// }
+
 const restoreRunnableClearTimeout = () => {
   return Runnable.prototype.clearTimeout = runnableClearTimeout
 }
@@ -101,37 +107,21 @@ const restoreRunnerRun = () => {
   return Runner.prototype.run = runnerRun
 }
 
-const restoreRunnerFail = () => {
-  return Runner.prototype.fail = runnerFail
-}
-
-const restoreRunnableRun = () => {
-  return Runnable.prototype.run = runnableRun
-}
-
-const patchTestClone = () => {
-  return Test.prototype.clone = function (...args) {
-    if (this.trueFn) {
-      this.fn = this.trueFn
-    }
-
-    const ret = testClone.apply(this, args)
-
-    ret.id = this.id
-    ret.err = null
-
-    return ret
-  }
-}
+// const restoreRunnerFail = () => {
+//   return Runner.prototype.fail = runnerFail
+// }
 
 //# matching the current Runner.prototype.fail except
 //# changing the logic for determing whether this is a valid err
-const patchRunnerFail = () => {
-  return Runner.prototype.fail = function (runnable, err) {
+const overrideRunnerFail = (runner) => {
+  // backup the original
+  const { fail } = runner
+
+  return runner.fail = function (runnable, err) {
     //# if this isnt a correct error object then just bail
     //# and call the original function
     if (Object.prototype.toString.call(err) !== '[object Error]') {
-      return runnerFail.call(this, runnable, err)
+      return fail.call(this, runnable, err)
     }
 
     //# else replicate the normal mocha functionality
@@ -143,11 +133,60 @@ const patchRunnerFail = () => {
   }
 }
 
-const patchRunnableRun = (Cypress) => {
-  return Runnable.prototype.run = function (...args) {
-    const runnable = this
+const overrideRunnableRun = (runnable, onRunnableRun) => {
+  runnable.run = function (...args) {
 
-    return Cypress.action('mocha:runnable:run', runnableRun, runnable, args)
+    // call the original onRunnableRun function
+    // with the original runnable.run function,
+    // the runnable itself, and the args
+    // debugger
+
+    return onRunnableRun(runnableRun, runnable, args)
+  }
+
+  runnable.clone = function (...args) {
+    if (this.trueFn) {
+      this.fn = this.trueFn
+    }
+
+    const ret = testClone.apply(this, args)
+
+    overrideRunnableRun(ret, onRunnableRun)
+    // console.log(this, ret)
+
+    // ret.attempts = this.attempts || []
+
+    // ret.attempts.push(this)
+
+    ret.id = this.id
+
+    delete ret.err
+
+    return ret
+  }
+}
+
+const overrideRunnerRunSuite = (runner, onRunnableRun) => {
+  // backup the original
+  const { runSuite } = runner
+
+  // override each of the runnables own .run() method
+  // and pass in the original so that the outside world
+  // can control how these runnables run
+  runner.runSuite = function (suite, fn) {
+    // use a regular for loop for perf
+    for (let i = 0; i < SUITE_RUNNABLE_PROPS.length; i++) {
+      let prop = SUITE_RUNNABLE_PROPS[i]
+
+      // find all the runnables for this particular prop
+      let runnables = suite[prop]
+
+      for (let j = 0; j < runnables.length; j++) {
+        overrideRunnableRun(runnables[j], onRunnableRun)
+      }
+    }
+
+    return runSuite.call(runner, suite, fn)
   }
 }
 
@@ -193,27 +232,24 @@ const patchRunnableResetTimeout = () => {
 }
 
 const restore = function () {
-  restoreRunnerRun()
-  restoreRunnerFail()
-  restoreRunnableRun()
+  // restoreRunnerRun()
+  // restoreRunnerFail()
   restoreRunnableClearTimeout()
+  // restoreTestClone()
 
   return restoreRunnableResetTimeout()
 }
 
-const override = function (Cypress) {
-  patchRunnerFail()
-  patchRunnableRun(Cypress)
+const patch = function () {
   patchRunnableClearTimeout()
-  patchTestClone()
 
   return patchRunnableResetTimeout()
 }
 
-const create = function (specWindow, Cypress, reporter) {
+const create = function (specWindow, reporter) {
   restore()
 
-  override(Cypress)
+  patch()
 
   //# generate the mocha + Mocha globals
   //# on the specWindow, and get the new
@@ -222,11 +258,13 @@ const create = function (specWindow, Cypress, reporter) {
 
   const _runner = getRunner(_mocha)
 
+  overrideRunnerFail(_runner)
+
   return {
     _mocha,
 
-    override () {
-      return override(Cypress)
+    onRunnableRun (onRunnableRun) {
+      return overrideRunnerRunSuite(_runner, onRunnableRun)
     },
 
     createRootTest (title, fn) {
